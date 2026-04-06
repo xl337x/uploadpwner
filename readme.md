@@ -10,7 +10,9 @@ WHAT'S NEW in v6.0:
   - Guided output: actionable curl one-liners after every finding
 
 installation
-```sudo apt update && sudo apt install -y python3 python3-pip python3-venv && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt```
+1. ```https://github.com/xl337x/uploadpwner.git```
+2. ```cd uploadpwner```
+3.```sudo apt update && sudo apt install -y python3 python3-pip python3-venv && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt```
 
 QUICK START:
 
