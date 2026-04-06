@@ -1,12 +1,16 @@
 UploadPwn v6.0 — Universal File Upload Exploitation Framework
 ==============================================================
 
+
 WHAT'S NEW in v6.0:
   - Threaded two-phase matrix: 10x faster (fuzz extensions first, then shells)
   - Full Character Injection module (%00, %0a, %0d0a, /, .\, ., ..., :)
   - Smart mode (--smart): auto-picks best attacks based on filter probes
   - Parallel verify_rce: checks all dirs/filenames concurrently
   - Guided output: actionable curl one-liners after every finding
+
+installation
+```sudo apt update && sudo apt install -y python3 python3-pip python3-venv && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt```
 
 QUICK START:
 
